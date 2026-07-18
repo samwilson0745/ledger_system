@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: ledger-system
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ledger
+    username: ledger
+    password: ledger
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.soham.ledger: INFO
+
+ledger:
+  transfer:
+    max-retries: 8
+    retry-base-backoff-ms: 15
