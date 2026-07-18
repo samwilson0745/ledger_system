@@ -1,6 +1,11 @@
 spring:
   application:
     name: ledger-system
+  # Auth is handled entirely by our own JWT filter chain (SecurityConfig) —
+  # this suppresses Spring Boot's default in-memory user/generated-password
+  # autoconfiguration, which would otherwise sit unused and log noise.
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
 
   datasource:
     url: jdbc:postgresql://localhost:5432/ledger
@@ -31,3 +36,17 @@ ledger:
   transfer:
     max-retries: 8
     retry-base-backoff-ms: 15
+
+  auth:
+    # Demo-only credential store — plaintext for portfolio simplicity, not a
+    # real user system. Override the secret in production via env var.
+    jwt-secret: ${LEDGER_AUTH_JWT_SECRET:dev-only-secret-change-me-please-32chars-min}
+    jwt-expiration-minutes: 60
+    users:
+      - username: admin
+        password: admin123
+
+  webhook:
+    enabled: true
+    url: ${LEDGER_WEBHOOK_URL:http://localhost:8080/webhooks/test-receiver}
+    secret: ${LEDGER_WEBHOOK_SECRET:dev-webhook-secret}

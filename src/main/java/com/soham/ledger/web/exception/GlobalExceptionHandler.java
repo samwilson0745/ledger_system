@@ -1,5 +1,6 @@
 package com.soham.ledger.web.exception;
 
+import com.soham.ledger.security.InvalidCredentialsException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +37,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TransferConflictException.class)
     public ResponseEntity<ErrorResponse> handleConflict(TransferConflictException ex) {
         return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
+        return build(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -51,9 +51,13 @@ public class LoadTestRunner {
         System.out.println("Concurrency:   " + concurrency);
         System.out.println();
 
+        String token = login(baseUrl, "admin", "admin123");
+        System.out.println("Authenticated as 'admin' (JWT acquired via POST /auth/login)");
+        System.out.println();
+
         BigDecimal startingBalance = new BigDecimal("1000000.00");
-        String accountAId = createAccount(baseUrl, "Load-Test-Alice", "USD", startingBalance);
-        String accountBId = createAccount(baseUrl, "Load-Test-Bob", "USD", startingBalance);
+        String accountAId = createAccount(baseUrl, token, "Load-Test-Alice", "USD", startingBalance);
+        String accountBId = createAccount(baseUrl, token, "Load-Test-Bob", "USD", startingBalance);
         System.out.println("Created account A: " + accountAId + " (starting balance " + startingBalance + ")");
         System.out.println("Created account B: " + accountBId + " (starting balance " + startingBalance + ")");
         System.out.println();
@@ -99,7 +103,7 @@ public class LoadTestRunner {
             executor.submit(() -> {
                 try {
                     startLatch.await();
-                    HttpResponse<String> response = postTransfer(baseUrl, t);
+                    HttpResponse<String> response = postTransfer(baseUrl, token, t);
                     switch (response.statusCode()) {
                         case 201 -> created.incrementAndGet();
                         case 200 -> replayed.incrementAndGet();
@@ -132,9 +136,9 @@ public class LoadTestRunner {
             System.out.println("WARNING: not all requests completed within timeout");
         }
 
-        String accountAFinal = getBalance(baseUrl, accountAId);
-        String accountBFinal = getBalance(baseUrl, accountBId);
-        String reconcileBody = getReconcile(baseUrl);
+        String accountAFinal = getBalance(baseUrl, token, accountAId);
+        String accountBFinal = getBalance(baseUrl, token, accountBId);
+        String reconcileBody = getReconcile(baseUrl, token);
 
         System.out.println("=== Results ===");
         System.out.println("Total requests sent:      " + plan.size());
@@ -169,7 +173,25 @@ public class LoadTestRunner {
     private record PlannedTransfer(String fromAccountId, String toAccountId, String amount, String idempotencyKey) {
     }
 
-    private static String createAccount(String baseUrl, String owner, String currency, BigDecimal startingBalance) throws IOException, InterruptedException {
+    private static String login(String baseUrl, String username, String password) throws IOException, InterruptedException {
+        String json = """
+                {"username":"%s","password":"%s"}
+                """.formatted(username, password);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/auth/login"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("Login failed: HTTP " + response.statusCode() + " " + response.body());
+        }
+        return extractField(response.body(), "token");
+    }
+
+    private static String createAccount(String baseUrl, String token, String owner, String currency, BigDecimal startingBalance) throws IOException, InterruptedException {
         String json = """
                 {"ownerName":"%s","currency":"%s","startingBalance":%s}
                 """.formatted(owner, currency, startingBalance.toPlainString());
@@ -177,6 +199,7 @@ public class LoadTestRunner {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/accounts"))
                 .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + token)
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
 
@@ -187,7 +210,7 @@ public class LoadTestRunner {
         return extractField(response.body(), "id");
     }
 
-    private static HttpResponse<String> postTransfer(String baseUrl, PlannedTransfer t) throws IOException, InterruptedException {
+    private static HttpResponse<String> postTransfer(String baseUrl, String token, PlannedTransfer t) throws IOException, InterruptedException {
         String json = """
                 {"fromAccountId":"%s","toAccountId":"%s","amount":%s,"idempotencyKey":"%s"}
                 """.formatted(t.fromAccountId(), t.toAccountId(), t.amount(), t.idempotencyKey());
@@ -196,24 +219,27 @@ public class LoadTestRunner {
                 .uri(URI.create(baseUrl + "/transfers"))
                 .timeout(Duration.ofSeconds(30))
                 .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + token)
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
 
         return CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private static String getBalance(String baseUrl, String accountId) throws IOException, InterruptedException {
+    private static String getBalance(String baseUrl, String token, String accountId) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/accounts/" + accountId))
+                .header("Authorization", "Bearer " + token)
                 .GET()
                 .build();
         HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
         return extractField(response.body(), "balance");
     }
 
-    private static String getReconcile(String baseUrl) throws IOException, InterruptedException {
+    private static String getReconcile(String baseUrl, String token) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/reconcile"))
+                .header("Authorization", "Bearer " + token)
                 .GET()
                 .build();
         HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());

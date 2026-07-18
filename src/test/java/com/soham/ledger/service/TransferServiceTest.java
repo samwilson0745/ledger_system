@@ -5,6 +5,7 @@ import com.soham.ledger.repository.TransactionRepository;
 import com.soham.ledger.web.exception.InsufficientBalanceException;
 import com.soham.ledger.web.exception.InvalidTransferException;
 import com.soham.ledger.web.exception.TransferConflictException;
+import com.soham.ledger.webhook.WebhookDispatcher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +36,9 @@ class TransferServiceTest {
     @Mock
     private TransactionRepository transactionRepository;
 
+    @Mock
+    private WebhookDispatcher webhookDispatcher;
+
     private TransferService transferService;
 
     private final UUID fromId = UUID.randomUUID();
@@ -45,7 +49,7 @@ class TransferServiceTest {
     @BeforeEach
     void setUp() {
         // maxRetries=3, baseBackoffMs=1 so retry tests run fast
-        transferService = new TransferService(transferExecutor, transactionRepository, 3, 1);
+        transferService = new TransferService(transferExecutor, transactionRepository, webhookDispatcher, 3, 1);
     }
 
     @Test

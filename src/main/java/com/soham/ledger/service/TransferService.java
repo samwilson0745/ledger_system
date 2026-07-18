@@ -7,6 +7,7 @@ import com.soham.ledger.web.exception.InsufficientBalanceException;
 import com.soham.ledger.web.exception.InvalidTransferException;
 import com.soham.ledger.web.exception.TransactionNotFoundException;
 import com.soham.ledger.web.exception.TransferConflictException;
+import com.soham.ledger.webhook.WebhookDispatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,15 +31,18 @@ public class TransferService {
 
     private final TransferExecutor transferExecutor;
     private final TransactionRepository transactionRepository;
+    private final WebhookDispatcher webhookDispatcher;
     private final int maxRetries;
     private final long baseBackoffMs;
 
     public TransferService(TransferExecutor transferExecutor,
                             TransactionRepository transactionRepository,
+                            WebhookDispatcher webhookDispatcher,
                             @Value("${ledger.transfer.max-retries:3}") int maxRetries,
                             @Value("${ledger.transfer.retry-base-backoff-ms:20}") long baseBackoffMs) {
         this.transferExecutor = transferExecutor;
         this.transactionRepository = transactionRepository;
+        this.webhookDispatcher = webhookDispatcher;
         this.maxRetries = maxRetries;
         this.baseBackoffMs = baseBackoffMs;
     }
@@ -53,6 +57,9 @@ public class TransferService {
                 TransferExecutionResult result = transferExecutor.executeAttempt(fromAccountId, toAccountId, amount, idempotencyKey);
                 if (result.transaction().getStatus() == TransactionStatus.FAILED) {
                     throw new InsufficientBalanceException(result.transaction().getFailureReason());
+                }
+                if (!result.replayed()) {
+                    webhookDispatcher.dispatchTransferCompleted(result.transaction());
                 }
                 return result;
             } catch (ObjectOptimisticLockingFailureException | DataIntegrityViolationException ex) {

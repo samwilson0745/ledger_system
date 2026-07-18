@@ -1,4 +1,6 @@
 spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   datasource:
     url: jdbc:h2:mem:ledger;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
     driver-class-name: org.h2.Driver
@@ -17,3 +19,15 @@ ledger:
   transfer:
     max-retries: 5
     retry-base-backoff-ms: 10
+
+  auth:
+    jwt-secret: test-only-secret-not-for-production-use-32chars-min
+    jwt-expiration-minutes: 60
+    users:
+      - username: admin
+        password: admin123
+
+  webhook:
+    enabled: false
+    url: http://localhost:8080/webhooks/test-receiver
+    secret: test-webhook-secret
